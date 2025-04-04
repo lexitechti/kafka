@@ -21,14 +21,21 @@ export class KafkaModule {
     return {
       global: true,
       module: KafkaModule,
-      imports: [],
+      imports: [DiscoveryModule],
       providers: [
+        DiscoveryService, 
+        Reflector,
         {
           provide: 'KafkaProvider',
-          useFactory: () => {
-            return new KafkaProvider(config.host, config.port, config.username, config.password, config.securityProtocol, config.mechanism, config.groupId);
+          useFactory: (discoveryService: DiscoveryService, reflector: Reflector) => {
+            const provider = new KafkaProvider(config.host, config.port, config.username, config.password, config.securityProtocol, config.mechanism, config.groupId);
+            
+            Object.defineProperty(provider, 'discoveryService', { value: discoveryService });
+            Object.defineProperty(provider, 'reflector', { value: reflector });
+            
+            return provider;
           },
-          inject: []
+          inject: [DiscoveryService, Reflector]
         }
       ],
       exports: [ 'KafkaProvider' ]
