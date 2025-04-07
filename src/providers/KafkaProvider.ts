@@ -55,7 +55,7 @@ export class KafkaProvider implements OnModuleInit {
       for (let index = 0; index < this.AWAITING_SUBSCRIPTIONS.length; index++) {
         const topicName = this.AWAITING_SUBSCRIPTIONS[index];
 
-        this.kafkaConsumer.subscribe([ topicName ]);
+        this.kafkaConsumer.subscribe([topicName]);
       }
 
       this.kafkaConsumer.consume();
@@ -72,12 +72,13 @@ export class KafkaProvider implements OnModuleInit {
       'sasl.username': username,
       'sasl.password': password,
       'linger.ms': 10,
-      "queue.buffering.max.messages": 100000, 
-      "queue.buffering.max.kbytes": 3000000, 
-      "request.timeout.ms": 60000, 
-      "message.timeout.ms": 300000,
-      "batch.size": 1048576, 
-      "compression.type": "snappy"
+      'queue.buffering.max.messages': 100000,
+      'queue.buffering.max.kbytes': 3000000,
+      'request.timeout.ms': 60000,
+      'message.timeout.ms': 300000,
+      'batch.size': 1048576,
+      'compression.type': 'snappy',
+      'message.max.bytes': 31457280
     }).connect();
 
     this.kafkaProducer.on('ready', () => {
@@ -150,6 +151,23 @@ export class KafkaProvider implements OnModuleInit {
       return this.AWAITING_PUBLISH_MESSAGES.push({ topic, buffer, partition });
     }
 
-    this.kafkaProducer.produce(topic, partition, buffer, Buffer.alloc(0));
+    const success = this.kafkaProducer.produce(topic, partition, buffer, Buffer.alloc(0));
+
+    if (!success) {
+      Logger.warn(`Buffer cheio. Aguardando para reprocessar a mensagem no tópico ${topic}...`, KafkaProvider.name);
+
+      const retryInterval = setInterval(() => {
+        try {
+          const retrySuccess = this.kafkaProducer.produce(topic, partition, buffer, Buffer.alloc(0));
+          if (retrySuccess) {
+            Logger.log(`Buffer liberado. Mensagem enviada para o tópico ${topic}`, KafkaProvider.name);
+            clearInterval(retryInterval);
+          }
+        } catch (err) {
+          Logger.error(`Erro ao tentar reenviar: ${err}`, KafkaProvider.name);
+          clearInterval(retryInterval);
+        }
+      }, 500);
+    }
   }
 }
